@@ -47,10 +47,12 @@ public sealed record RelationalConventionSetBuilderDependencies
     [EntityFrameworkInternal]
     public RelationalConventionSetBuilderDependencies(
         IRelationalAnnotationProvider relationalAnnotationProvider,
-        IUpdateSqlGenerator updateSqlGenerator)
+        IUpdateSqlGenerator updateSqlGenerator,
+        IRelationalTypeMappingSource relationalTypeMappingSource)
     {
         RelationalAnnotationProvider = relationalAnnotationProvider;
         UpdateSqlGenerator = updateSqlGenerator;
+        RelationalTypeMappingSource = relationalTypeMappingSource;
     }
 
     /// <summary>
@@ -62,4 +64,9 @@ public sealed record RelationalConventionSetBuilderDependencies
     ///     For generation of SQL.
     /// </summary>
     public IUpdateSqlGenerator UpdateSqlGenerator { get; init; }
+
+    /// <summary>
+    ///     The relational type mapping source.
+    /// </summary>
+    public IRelationalTypeMappingSource RelationalTypeMappingSource { get; init; }
 }

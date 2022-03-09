@@ -226,6 +226,11 @@ public class Property : PropertyBase, IMutableProperty, IConventionProperty, IPr
     {
         EnsureMutable();
 
+        if (valueGenerated == ValueGenerated.OnAdd && this.Name == "Id" && this.IsShadowProperty())
+        {
+            Console.WriteLine("gf");
+        }
+
         _valueGenerated = valueGenerated;
 
         _valueGeneratedConfigurationSource = valueGenerated == null

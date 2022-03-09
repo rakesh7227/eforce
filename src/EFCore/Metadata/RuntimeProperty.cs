@@ -196,7 +196,7 @@ public class RuntimeProperty : RuntimePropertyBase, IProperty
     /// <inheritdoc />
     ValueGenerated IReadOnlyProperty.ValueGenerated
     {
-        [DebuggerStepThrough]
+        //[DebuggerStepThrough]
         get => _valueGenerated;
     }
 

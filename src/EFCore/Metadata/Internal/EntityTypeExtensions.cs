@@ -273,6 +273,12 @@ public static class EntityTypeExtensions
 
         foreach (var property in entityType.GetDeclaredProperties())
         {
+            if (property.Name == "Id" && property.IsShadowProperty())
+            {
+                Console.WriteLine("");
+            }
+
+
             var indexes = new PropertyIndexes(
                 index: index++,
                 originalValueIndex: property.RequiresOriginalValue() ? originalValueIndex++ : -1,

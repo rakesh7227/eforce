@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 
@@ -51,9 +53,11 @@ public partial class RelationalShapedQueryCompilingExpressionVisitor : ShapedQue
         var querySplittingBehavior = ((RelationalQueryCompilationContext)QueryCompilationContext).QuerySplittingBehavior;
         var splitQuery = querySplittingBehavior == QuerySplittingBehavior.SplitQuery;
         var collectionCount = 0;
+
         var shaper = new ShaperProcessingExpressionVisitor(this, selectExpression, _tags, splitQuery, nonComposedFromSql).ProcessShaper(
             shapedQueryExpression.ShaperExpression,
             out var relationalCommandCache, out var readerColumns, out var relatedDataLoaders, ref collectionCount);
+
         if (querySplittingBehavior == null
             && collectionCount > 1)
         {

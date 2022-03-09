@@ -69,6 +69,12 @@ public class ValueGenerationManager : IValueGenerationManager
     {
         var entityEntry = new EntityEntry(entry);
 
+
+        foreach (var prop in entry.EntityType.GetProperties())
+        {
+            var foo = prop.RequiresValueGenerator();
+        }
+
         foreach (var property in entry.EntityType.GetValueGeneratingProperties())
         {
             if (!entry.HasDefaultValue(property)

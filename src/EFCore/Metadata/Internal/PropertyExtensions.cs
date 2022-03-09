@@ -123,6 +123,11 @@ public static class PropertyExtensions
     /// </summary>
     public static bool MayBeStoreGenerated(this IProperty property)
     {
+        if (property.Name == "Id" && property.IsShadowProperty())
+        {
+            Console.WriteLine("");
+        }
+
         if (property.ValueGenerated != ValueGenerated.Never)
         {
             return true;
