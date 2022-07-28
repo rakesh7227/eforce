@@ -158,7 +158,7 @@ public class CosmosModelBuilderGenericTest : ModelBuilderGenericTest
             Assert.Single(entity.GetKeys().Where(k => k != entity.FindPrimaryKey()));
 
             var idProperty = entity.GetDeclaredProperties()
-                .Single(p => p.GetJsonPropertyName() == StoreKeyConvention.IdPropertyJsonName);
+                .Single(p => CosmosPropertyExtensions.GetJsonPropertyName(p) == StoreKeyConvention.IdPropertyJsonName);
             Assert.Single(idProperty.GetContainingKeys());
             Assert.NotNull(idProperty.GetValueGeneratorFactory());
         }
@@ -184,7 +184,7 @@ public class CosmosModelBuilderGenericTest : ModelBuilderGenericTest
             Assert.Empty(entity.GetKeys().Where(k => k != entity.FindPrimaryKey()));
 
             var idProperty = entity.GetDeclaredProperties()
-                .Single(p => p.GetJsonPropertyName() == StoreKeyConvention.IdPropertyJsonName);
+                .Single(p => CosmosPropertyExtensions.GetJsonPropertyName(p) == StoreKeyConvention.IdPropertyJsonName);
             Assert.Single(idProperty.GetContainingKeys());
             Assert.Null(idProperty.GetValueGeneratorFactory());
         }

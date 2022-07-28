@@ -37,6 +37,7 @@ public static class RelationalForeignKeyExtensions
 
         var columnNames = foreignKey.Properties.GetColumnNames(storeObject);
         var duplicateColumnNames = duplicateForeignKey.Properties.GetColumnNames(storeObject);
+
         if (columnNames is null
             || duplicateColumnNames is null)
         {
@@ -202,7 +203,8 @@ public static class RelationalForeignKeyExtensions
         IDiagnosticsLogger<DbLoggerCategory.Model.Validation>? logger)
     {
         if (storeObject.StoreObjectType != StoreObjectType.Table
-            || principalStoreObject.StoreObjectType != StoreObjectType.Table)
+            || principalStoreObject.StoreObjectType != StoreObjectType.Table
+            || foreignKey.DeclaringEntityType.IsMappedToJson())
         {
             return null;
         }

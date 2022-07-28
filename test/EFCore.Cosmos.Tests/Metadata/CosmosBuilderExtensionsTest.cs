@@ -132,7 +132,7 @@ public class CosmosBuilderExtensionsTest
         Assert.NotNull(etagProperty);
         Assert.Equal(ValueGenerated.OnAddOrUpdate, etagProperty.ValueGenerated);
         Assert.True(etagProperty.IsConcurrencyToken);
-        Assert.Equal("_etag", etagProperty.GetJsonPropertyName());
+        Assert.Equal("_etag", CosmosPropertyExtensions.GetJsonPropertyName(etagProperty));
     }
 
     protected virtual ModelBuilder CreateConventionModelBuilder()

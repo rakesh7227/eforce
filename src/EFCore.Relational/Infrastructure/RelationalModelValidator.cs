@@ -3,7 +3,9 @@
 
 using System.Data;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace Microsoft.EntityFrameworkCore.Infrastructure;
 
@@ -61,6 +63,7 @@ public class RelationalModelValidator : ModelValidator
         ValidateBoolsWithDefaults(model, logger);
         ValidateIndexProperties(model, logger);
         ValidateTriggers(model, logger);
+        ValidateJsonEntities(model, logger);
     }
 
     /// <summary>
@@ -543,25 +546,7 @@ public class RelationalModelValidator : ModelValidator
         IModel model,
         IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
     {
-        var tables = new Dictionary<StoreObjectIdentifier, List<IEntityType>>();
-        foreach (var entityType in model.GetEntityTypes())
-        {
-            var tableId = StoreObjectIdentifier.Create(entityType, StoreObjectType.Table);
-            if (tableId == null)
-            {
-                continue;
-            }
-
-            var table = tableId.Value;
-            if (!tables.TryGetValue(table, out var mappedTypes))
-            {
-                mappedTypes = new List<IEntityType>();
-                tables[table] = mappedTypes;
-            }
-
-            mappedTypes.Add(entityType);
-        }
-
+        var tables = BuildSharedTableEntityMap(model.GetEntityTypes().Where(e => !e.IsMappedToJson()));
         foreach (var (table, mappedTypes) in tables)
         {
             ValidateSharedTableCompatibility(mappedTypes, table, logger);
@@ -658,6 +643,30 @@ public class RelationalModelValidator : ModelValidator
                 return tuple;
             }
         }
+    }
+
+    private Dictionary<StoreObjectIdentifier, List<IEntityType>> BuildSharedTableEntityMap(IEnumerable<IEntityType> entityTypes)
+    {
+        var result = new Dictionary<StoreObjectIdentifier, List<IEntityType>>();
+        foreach (var entityType in entityTypes)
+        {
+            var tableId = StoreObjectIdentifier.Create(entityType, StoreObjectType.Table);
+            if (tableId == null)
+            {
+                continue;
+            }
+
+            var table = tableId.Value;
+            if (!result.TryGetValue(table, out var mappedTypes))
+            {
+                mappedTypes = new List<IEntityType>();
+                result[table] = mappedTypes;
+            }
+
+            mappedTypes.Add(entityType);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -817,7 +826,7 @@ public class RelationalModelValidator : ModelValidator
         IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
     {
         var views = new Dictionary<StoreObjectIdentifier, List<IEntityType>>();
-        foreach (var entityType in model.GetEntityTypes())
+        foreach (var entityType in model.GetEntityTypes().Where(e => !e.IsMappedToJson()))
         {
             var viewsName = entityType.GetViewName();
             if (viewsName == null)
@@ -2221,6 +2230,236 @@ public class RelationalModelValidator : ModelValidator
                             entityType.GetSchemaQualifiedTableName())
                     );
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    protected virtual void ValidateJsonEntities(
+        IModel model,
+        IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
+    {
+        var tables = BuildSharedTableEntityMap(model.GetEntityTypes());
+        foreach (var (table, mappedTypes) in tables)
+        {
+            if (mappedTypes.All(x => !x.IsMappedToJson()))
+            {
+                continue;
+            }
+
+            var nonOwnedTypes = mappedTypes.Where(x => !x.IsOwned());
+            var nonOwnedTypesCount = nonOwnedTypes.Count();
+            if (nonOwnedTypesCount == 0)
+            {
+                var nonJsonType = mappedTypes.Where(x => !x.IsMappedToJson()).First();
+
+                // must be owned collection (mapped to a separate table) that owns a JSON type
+                // issue #28441
+                // TODO: resource string
+                throw new InvalidOperationException(
+                    $"Owned entity type '{nonJsonType.DisplayName()}' is mapped to table '{table.DisplayName()}' and contains JSON columns. This is currently not supported. All owned types containing a JSON column must be mapped to a JSON column themselves.");
+            }
+
+            var distinctRootTypes = nonOwnedTypes.Select(x => x.GetRootType()).Distinct().ToList();
+            if (distinctRootTypes.Count > 1)
+            {
+                // issue #28442
+                throw new InvalidOperationException("Table splitting is not supported for entities containing entities mapped to JSON.");
+            }
+
+            var rootType = distinctRootTypes[0];
+            var jsonEntitiesMappedToSameJsonColumn = mappedTypes
+                .Where(x => x.FindOwnership() is IForeignKey ownership && !ownership.PrincipalEntityType.IsOwned())
+                .GroupBy(x => x.JsonColumnName())
+                .Where(x => x.Key is not null)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .Where(x => x.Count > 1)
+                .Select(x => x.Key);
+
+            if (jsonEntitiesMappedToSameJsonColumn.FirstOrDefault() is string jsonEntityMappedToSameJsonColumn)
+            {
+                throw new InvalidOperationException(
+                    $"Multiple aggregates are mapped to the same JSON column '{jsonEntityMappedToSameJsonColumn}' in table '{table.Name}'. Each aggreagate must map to a different column.");
+            }
+
+            ValidateJsonEntityRoot(table, rootType);
+
+            foreach (var jsonEntityType in mappedTypes.Where(x => x.IsMappedToJson()))
+            {
+                ValidateJsonEntityNavigations(table, jsonEntityType);
+                ValidateJsonEntityKey(table, jsonEntityType);
+                ValidateJsonEntityProperties(table, jsonEntityType);
+            }
+        }
+
+        // TODO: support this for raw SQL and function mappings in #19970 and #21627 and remove the check
+        ValidateJsonEntitiesNotMappedToTableOrView(model.GetEntityTypes());
+        ValidateJsonViews(model.GetEntityTypes().Where(t => t.IsMappedToJson()));
+    }
+
+    private void ValidateJsonEntitiesNotMappedToTableOrView(IEnumerable<IEntityType> entityTypes)
+    {
+        var entitiesNotMappedToTableOrView = entityTypes.Where(x => !x.IsMappedToJson()
+            && x.GetSchemaQualifiedTableName() == null
+            && x.GetSchemaQualifiedViewName() == null);
+
+        foreach (var entityNotMappedToTableOrView in entitiesNotMappedToTableOrView)
+        {
+            if (entityNotMappedToTableOrView.GetDeclaredNavigations().Any(x => x.ForeignKey.IsOwnership && x.TargetEntityType.IsMappedToJson()))
+            {
+                throw new InvalidOperationException(
+                    $"Entity type '{entityNotMappedToTableOrView.DisplayName()}' references entities mapped to JSON but is not itself mapped to a table or a view. This is not supported.");
+            }
+        }
+    }
+
+    private void ValidateJsonViews(IEnumerable<IEntityType> entityTypes)
+    {
+        foreach (var jsonEntityType in entityTypes)
+        {
+            var viewName = jsonEntityType.GetViewName();
+            if (viewName == null)
+            {
+                continue;
+            }
+
+            var ownership = jsonEntityType.FindOwnership()!;
+            var ownerViewName = ownership.PrincipalEntityType.GetViewName();
+            if (viewName != ownerViewName)
+            {
+                throw new InvalidOperationException($"Entity '{jsonEntityType.DisplayName()}' is mapped to JSON and also mapped to a view '{viewName}', however it's owner '{ownership.PrincipalEntityType.DisplayName()}' is mapped to a different view '{ownerViewName}'. Every entity mapped to JSON must also map to the same view as it's owner.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    protected virtual void ValidateJsonEntityRoot(
+        in StoreObjectIdentifier storeObject,
+        IEntityType rootType)
+    {
+        var mappingStrategy = rootType.GetMappingStrategy();
+        if (mappingStrategy != null && mappingStrategy != RelationalAnnotationNames.TphMappingStrategy)
+        {
+            // issue #28443
+            throw new InvalidOperationException(
+                $"Entity type '{rootType.DisplayName()}' references entities mapped to JSON. Only '{RelationalAnnotationNames.TphMappingStrategy}' inheritance is supported for those entities.");
+        }
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    protected virtual void ValidateJsonEntityNavigations(
+        in StoreObjectIdentifier storeObject,
+        IEntityType jsonEntityType)
+    {
+        var ownership = jsonEntityType.FindOwnership()!;
+
+        if (ownership.PrincipalEntityType.IsOwned()
+            && !ownership.PrincipalEntityType.IsMappedToJson())
+        {
+            // TODO: resource string
+            // issue #28441
+            throw new InvalidOperationException(
+                $"Owned entity type '{ownership.PrincipalEntityType.DisplayName()}' is mapped to table '{storeObject.DisplayName()}' and contains JSON columns. This is currently not supported. All owned types containing a JSON column must be mapped to a JSON column themselves.");
+        }
+
+        foreach (var navigation in jsonEntityType.GetDeclaredNavigations())
+        {
+            if (!navigation.ForeignKey.IsOwnership)
+            {
+                throw new InvalidOperationException(
+                    $"Entity type '{jsonEntityType.DisplayName()}' is mapped to JSON and has navigation to a regular entity which is not the owner.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    protected virtual void ValidateJsonEntityKey(
+        in StoreObjectIdentifier storeObject,
+        IEntityType jsonEntityType)
+    {
+        var primaryKeyProperties = jsonEntityType.FindPrimaryKey()!.Properties;
+        var ownership = jsonEntityType.FindOwnership()!;
+
+        foreach (var primaryKeyProperty in primaryKeyProperties)
+        {
+            if (primaryKeyProperty.GetJsonPropertyName() != null)
+            {
+                throw new InvalidOperationException($"Key property '{primaryKeyProperty.Name}' on JSON-mapped entity '{jsonEntityType.DisplayName()}' should not have JSON property name configured explicitly.");
+            }
+        }
+
+        if (!ownership.IsUnique)
+        {
+            // for collection entities, make sure that ordinal key is not explicitly defined
+            var ordinalKeyProperty = primaryKeyProperties.Last();
+            if (!ordinalKeyProperty.IsShadowProperty()
+                || ordinalKeyProperty.ClrType != typeof(int)
+                || !ordinalKeyProperty.Name.EndsWith("Id", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Entity type '{jsonEntityType.DisplayName()}' is part of collection mapped to JSON and has it's ordinal key defined explicitly. Only implicitly defined ordinal keys are supported.");
+            }
+        }
+
+        var ownerEntityTypeKeyPropertiesCount = ownership.PrincipalEntityType.FindPrimaryKey()!.Properties.Count;
+        var expectedKeyCount = ownership.IsUnique
+            ? ownerEntityTypeKeyPropertiesCount
+            : ownerEntityTypeKeyPropertiesCount + 1;
+
+        if (primaryKeyProperties.Count != expectedKeyCount)
+        {
+            throw new InvalidOperationException(
+                $"Entity type '{jsonEntityType.DisplayName()}' has incorrect number of primary key properties. Expected number is: {expectedKeyCount}, actual number is: {primaryKeyProperties.Count}.");
+        }
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public virtual void ValidateJsonEntityProperties(
+        in StoreObjectIdentifier storeObject,
+        IEntityType jsonEntityType)
+    {
+        var jsonPropertyNames = new List<string>();
+        foreach (var property in jsonEntityType.GetDeclaredProperties().Where(p => !p.IsKey()))
+        {
+            if (property.TryGetDefaultValue(out var _))
+            {
+                throw new InvalidOperationException(
+                    $"Setting default value on properties of an entity mapped to JSON is not supported. Entity: '{jsonEntityType.DisplayName()}', property: '{property.Name}'.");
+            }
+
+            var jsonPropertyName = property.GetJsonPropertyName()!;
+            if (!jsonPropertyNames.Contains(jsonPropertyName))
+            {
+                jsonPropertyNames.Add(jsonPropertyName);
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Entity '{jsonEntityType.DisplayName()}' is mapped to JSON and it contains multiple properties or navigations which are mapped to the same JSON property '{jsonPropertyName}'. Each property should map to a unique JSON property.");
+            }
+        }
+
+        foreach (var navigation in jsonEntityType.GetDeclaredNavigations())
+        {
+            var jsonPropertyName = navigation.GetJsonPropertyName()!;
+            if (!jsonPropertyNames.Contains(jsonPropertyName))
+            {
+                jsonPropertyNames.Add(jsonPropertyName);
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Entity '{jsonEntityType.DisplayName()}' is mapped to JSON and it contains multiple properties or navigations which are mapped to the same JSON property '{jsonPropertyName}'. Each property should map to a unique JSON property.");
             }
         }
     }

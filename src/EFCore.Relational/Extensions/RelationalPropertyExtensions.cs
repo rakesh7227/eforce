@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 // ReSharper disable once CheckNamespace
@@ -169,8 +168,13 @@ public static class RelationalPropertyExtensions
     /// <param name="property">The property.</param>
     /// <param name="storeObject">The identifier of the table-like store object containing the column.</param>
     /// <returns>The default column name to which the property would be mapped.</returns>
-    public static string GetDefaultColumnName(this IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
+    public static string? GetDefaultColumnName(this IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
     {
+        if (property.DeclaringEntityType.IsMappedToJson())
+        {
+            return null;
+        }
+
         var sharedTablePrincipalPrimaryKeyProperty = FindSharedObjectRootPrimaryKeyProperty(property, storeObject);
         if (sharedTablePrincipalPrimaryKeyProperty != null)
         {
@@ -1446,6 +1450,12 @@ public static class RelationalPropertyExtensions
 
     private static IReadOnlyProperty? FindSharedObjectRootProperty(IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
     {
+        if (property.DeclaringEntityType.IsMappedToJson())
+        {
+            //JSON-splitting is not supported
+            return null;
+        }
+
         var column = property.GetColumnName(storeObject);
         if (column == null)
         {
@@ -1500,6 +1510,7 @@ public static class RelationalPropertyExtensions
         {
             var linkingRelationship = principalProperty.DeclaringEntityType
                 .FindRowInternalForeignKeys(storeObject).FirstOrDefault();
+
             if (linkingRelationship == null)
             {
                 break;
@@ -1958,4 +1969,41 @@ public static class RelationalPropertyExtensions
 
         throw new InvalidOperationException(message, exception);
     }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static string? GetJsonPropertyName(this IReadOnlyProperty property)
+        => (string?)property.FindAnnotation(RelationalAnnotationNames.JsonPropertyName)?.Value
+            ?? (property.IsKey() || !property.DeclaringEntityType.IsMappedToJson() ? null : property.Name);
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static void SetJsonPropertyName(this IMutableProperty property, string? name)
+        => property.SetOrRemoveAnnotation(
+            RelationalAnnotationNames.JsonPropertyName,
+            Check.NullButNotEmpty(name, nameof(name)));
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static string? SetJsonPropertyName(
+        this IConventionProperty property,
+        string? name,
+        bool fromDataAnnotation = false)
+    {
+        property.SetOrRemoveAnnotation(
+            RelationalAnnotationNames.JsonPropertyName,
+            Check.NullButNotEmpty(name, nameof(name)),
+            fromDataAnnotation);
+
+        return name;
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static ConfigurationSource? GetJsonPropertyNameConfigurationSource(this IConventionProperty property)
+        => property.FindAnnotation(RelationalAnnotationNames.JsonPropertyName)?.GetConfigurationSource();
 }
