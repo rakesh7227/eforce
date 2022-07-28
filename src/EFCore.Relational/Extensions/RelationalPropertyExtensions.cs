@@ -169,8 +169,13 @@ public static class RelationalPropertyExtensions
     /// <param name="property">The property.</param>
     /// <param name="storeObject">The identifier of the table-like store object containing the column.</param>
     /// <returns>The default column name to which the property would be mapped.</returns>
-    public static string GetDefaultColumnName(this IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
+    public static string? GetDefaultColumnName(this IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
     {
+        if (property.DeclaringEntityType.IsMappedToJson())
+        {
+            return null;
+        }
+
         var sharedTablePrincipalPrimaryKeyProperty = FindSharedObjectRootPrimaryKeyProperty(property, storeObject);
         if (sharedTablePrincipalPrimaryKeyProperty != null)
         {
@@ -1446,6 +1451,12 @@ public static class RelationalPropertyExtensions
 
     private static IReadOnlyProperty? FindSharedObjectRootProperty(IReadOnlyProperty property, in StoreObjectIdentifier storeObject)
     {
+        if (property.DeclaringEntityType.IsMappedToJson())
+        {
+            //JSON-splitting is not supported
+            return null;
+        }
+
         var column = property.GetColumnName(storeObject);
         if (column == null)
         {
@@ -1500,6 +1511,17 @@ public static class RelationalPropertyExtensions
         {
             var linkingRelationship = principalProperty.DeclaringEntityType
                 .FindRowInternalForeignKeys(storeObject).FirstOrDefault();
+
+            // principal is mapped to json, but the property we are fetching the shared object root for is not
+            // this can happen only when the model is not fully configured yet, parent is already marked as json,
+            // the child is not marked yet, but it will be (mix of owned entities and non-owned is not supported)
+            // in this case, we should still find the linking relationship, even though we normally don't do it for the json entities
+            // just so we can complete configuring the relationships
+            if (linkingRelationship == null && principalProperty.DeclaringEntityType.IsMappedToJson())
+            {
+                linkingRelationship = FindRowInternalForeignKeyForJson(principalProperty.DeclaringEntityType, storeObject);
+            }
+
             if (linkingRelationship == null)
             {
                 break;
@@ -1509,6 +1531,38 @@ public static class RelationalPropertyExtensions
         }
 
         return principalProperty == property ? null : principalProperty;
+    }
+
+    private static IReadOnlyForeignKey? FindRowInternalForeignKeyForJson(
+        IReadOnlyEntityType entityType,
+        StoreObjectIdentifier storeObject)
+    {
+        var primaryKey = entityType.FindPrimaryKey();
+        if (primaryKey == null)
+        {
+            return null;
+        }
+
+        foreach (var foreignKey in entityType.GetForeignKeys())
+        {
+            if (!foreignKey.PrincipalKey.IsPrimaryKey()
+                || foreignKey.PrincipalEntityType.IsAssignableFrom(foreignKey.DeclaringEntityType)
+                || !foreignKey.Properties.SequenceEqual(primaryKey.Properties)
+                || !IsMapped(foreignKey, storeObject))
+            {
+                continue;
+            }
+
+            return foreignKey;
+        }
+
+        return null;
+
+        static bool IsMapped(IReadOnlyForeignKey foreignKey, StoreObjectIdentifier storeObject)
+            => (StoreObjectIdentifier.Create(foreignKey.DeclaringEntityType, storeObject.StoreObjectType) == storeObject
+                    || foreignKey.DeclaringEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject))
+                && (StoreObjectIdentifier.Create(foreignKey.PrincipalEntityType, storeObject.StoreObjectType) == storeObject
+                    || foreignKey.PrincipalEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject));
     }
 
     private static IReadOnlyProperty? FindSharedObjectRootConcurrencyTokenProperty(
@@ -1958,4 +2012,40 @@ public static class RelationalPropertyExtensions
 
         throw new InvalidOperationException(message, exception);
     }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static string JsonPropertyName(this IReadOnlyProperty property)
+        => (string?)property.FindAnnotation(RelationalAnnotationNames.JsonPropertyName)?.Value ?? property.Name;
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static void SetJsonPropertyName(this IMutableProperty property, string? name)
+        => property.SetOrRemoveAnnotation(
+            RelationalAnnotationNames.JsonPropertyName,
+            Check.NullButNotEmpty(name, nameof(name)));
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static string? SetJsonPropertyName(
+        this IConventionProperty property,
+        string? name,
+        bool fromDataAnnotation = false)
+    {
+        property.SetOrRemoveAnnotation(
+            RelationalAnnotationNames.JsonPropertyName,
+            Check.NullButNotEmpty(name, nameof(name)),
+            fromDataAnnotation);
+
+        return name;
+    }
+
+    /// <summary>
+    /// TODO
+    /// </summary>
+    public static ConfigurationSource? GetJsonPropertyNameConfigurationSource(this IConventionProperty property)
+        => property.FindAnnotation(RelationalAnnotationNames.JsonPropertyName)?.GetConfigurationSource();
 }

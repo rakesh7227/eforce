@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.EntityFrameworkCore.Storage;
+
 namespace Microsoft.EntityFrameworkCore.Infrastructure;
 
 /// <summary>
@@ -47,10 +49,12 @@ public sealed record RelationalModelRuntimeInitializerDependencies
     [EntityFrameworkInternal]
     public RelationalModelRuntimeInitializerDependencies(
         RelationalModelDependencies relationalModelDependencies,
-        IRelationalAnnotationProvider relationalAnnotationProvider)
+        IRelationalAnnotationProvider relationalAnnotationProvider,
+        IRelationalTypeMappingSource relationalTypeMappingSource)
     {
         RelationalModelDependencies = relationalModelDependencies;
         RelationalAnnotationProvider = relationalAnnotationProvider;
+        RelationalTypeMappingSource = relationalTypeMappingSource;
     }
 
     /// <summary>
@@ -62,4 +66,9 @@ public sealed record RelationalModelRuntimeInitializerDependencies
     ///     The relational annotation provider.
     /// </summary>
     public IRelationalAnnotationProvider RelationalAnnotationProvider { get; init; }
+
+    /// <summary>
+    ///     The relational type mapping source.
+    /// </summary>
+    public IRelationalTypeMappingSource RelationalTypeMappingSource { get; init; }
 }

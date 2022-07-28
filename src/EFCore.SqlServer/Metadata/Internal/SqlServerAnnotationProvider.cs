@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Microsoft.EntityFrameworkCore.SqlServer.Metadata.Internal;
 
@@ -234,11 +235,16 @@ public class SqlServerAnnotationProvider : RelationalAnnotationProvider
                 string.Format(CultureInfo.InvariantCulture, "{0}, {1}", seed ?? 1, increment ?? 1));
         }
 
-        // Model validation ensures that these facets are the same on all mapped properties
-        var property = column.PropertyMappings.First().Property;
-        if (property.IsSparse() is bool isSparse)
+        // column with no property mappings is a json column
+        // all annotations that rely on property mappings should be skipped for json columns
+        if (column.PropertyMappings.Any())
         {
-            yield return new Annotation(SqlServerAnnotationNames.Sparse, isSparse);
+            // Model validation ensures that these facets are the same on all mapped properties
+            var property = column.PropertyMappings.First().Property;
+            if (property?.IsSparse() is bool isSparse)
+            {
+                yield return new Annotation(SqlServerAnnotationNames.Sparse, isSparse);
+            }
         }
 
         var entityType = column.Table.EntityTypeMappings.First().EntityType;

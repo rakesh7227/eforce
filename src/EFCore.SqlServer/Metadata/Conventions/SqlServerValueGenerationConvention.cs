@@ -96,6 +96,16 @@ public class SqlServerValueGenerationConvention : RelationalValueGenerationConve
     /// <returns>The store value generation strategy to set for the given property.</returns>
     protected override ValueGenerated? GetValueGenerated(IConventionProperty property)
     {
+        // TODO: move to relational?
+        if (property.DeclaringEntityType.IsMappedToJson()
+            && !property.DeclaringEntityType.FindOwnership()!.IsUnique
+            && property.Name == "Id"
+            && property.IsShadowProperty()
+            && property.ClrType == typeof(int))
+        {
+            return ValueGenerated.OnAdd;
+        }
+
         var declaringTable = property.GetMappedStoreObjects(StoreObjectType.Table).FirstOrDefault();
         if (declaringTable.Name == null)
         {

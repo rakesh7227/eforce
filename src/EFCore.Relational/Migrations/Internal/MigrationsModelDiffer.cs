@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Migrations.Internal;
@@ -604,7 +605,8 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
             yield return alterTableOperation;
         }
 
-        var operations = Diff(source.Columns, target.Columns, diffContext)
+        var operations = Diff(source.Columns.Where(c => c is not JsonColumn), target.Columns.Where(c => c is not JsonColumn), diffContext)
+            .Concat(Diff(source.Columns.OfType<JsonColumn>(), target.Columns.OfType<JsonColumn>(), diffContext))
             .Concat(Diff(source.UniqueConstraints, target.UniqueConstraints, diffContext))
             .Concat(Diff(source.Indexes, target.Indexes, diffContext))
             .Concat(Diff(source.CheckConstraints, target.CheckConstraints, diffContext));
@@ -639,7 +641,11 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
         createTableOperation.AddAnnotations(target.GetAnnotations());
 
         createTableOperation.Columns.AddRange(
-            GetSortedColumns(target).SelectMany(p => Add(p, diffContext, inline: true)).Cast<AddColumnOperation>());
+            GetSortedColumns(target).Where(c => c is not JsonColumn).SelectMany(p => Add(p, diffContext, inline: true)).Cast<AddColumnOperation>());
+
+        createTableOperation.Columns.AddRange(
+            GetSortedColumns(target).OfType<JsonColumn>().SelectMany(p => Add(p, diffContext, inline: true)).Cast<AddColumnOperation>());
+
         var primaryKey = target.PrimaryKey;
         if (primaryKey != null)
         {
@@ -688,7 +694,7 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
 
     private static IEnumerable<IColumn> GetSortedColumns(ITable table)
     {
-        var columns = table.Columns.ToHashSet();
+        var columns = table.Columns.Where(x => x is not JsonColumn).ToHashSet();
         var sortedColumns = new List<IColumn>(columns.Count);
         foreach (var property in GetSortedProperties(GetMainType(table).GetRootType(), table))
         {
@@ -701,9 +707,14 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
 
         Check.DebugAssert(columns.Count == 0, "columns is not empty");
 
+        // issue #28539 
+        // ideally we should inject json column in the place corresponding to the navigation that maps to it in the clr type
+        var jsonColumns = table.Columns.Where(x => x is JsonColumn).OrderBy(x => x.Name);
+
         return sortedColumns.Where(c => c.Order.HasValue).OrderBy(c => c.Order)
             .Concat(sortedColumns.Where(c => !c.Order.HasValue))
-            .Concat(columns);
+            .Concat(columns)
+            .Concat(jsonColumns);
     }
 
     private static IEnumerable<IProperty> GetSortedProperties(IEntityType entityType, ITable table)
@@ -770,6 +781,12 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
         {
             foreach (var linkingForeignKey in table.GetReferencingRowInternalForeignKeys(entityType))
             {
+                // skip json entities, their properties are not mapped to anything
+                if (linkingForeignKey.DeclaringEntityType.IsMappedToJson())
+                {
+                    continue;
+                }
+
                 var linkingNavigationProperty = linkingForeignKey.PrincipalToDependent?.PropertyInfo;
                 var properties = GetSortedProperties(linkingForeignKey.DeclaringEntityType, table).ToList();
                 if (linkingNavigationProperty == null)
@@ -1059,16 +1076,23 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
             Name = target.Name
         };
 
-        var targetMapping = target.PropertyMappings.First();
-        var targetTypeMapping = targetMapping.TypeMapping;
-
-        Initialize(
-            operation, target, targetTypeMapping, target.IsNullable,
-            target.GetAnnotations(), inline);
-
-        if (!inline && target.Order.HasValue)
+        if (target is JsonColumn jsonColumn)
         {
-            operation.AddAnnotation(RelationalAnnotationNames.ColumnOrder, target.Order.Value);
+            InitializeJsonColumn(operation, jsonColumn, jsonColumn.IsNullable, target.GetAnnotations(), inline);
+        }
+        else
+        {
+            var targetMapping = target.PropertyMappings.First();
+            var targetTypeMapping = targetMapping.TypeMapping;
+
+            Initialize(
+                operation, target, targetTypeMapping, target.IsNullable,
+                target.GetAnnotations(), inline);
+
+            if (!inline && target.Order.HasValue)
+            {
+                operation.AddAnnotation(RelationalAnnotationNames.ColumnOrder, target.Order.Value);
+            }
         }
 
         yield return operation;
@@ -1157,6 +1181,24 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
         columnOperation.IsStored = column.IsStored;
         columnOperation.Comment = column.Comment;
         columnOperation.Collation = column.Collation;
+        columnOperation.AddAnnotations(migrationsAnnotations);
+    }
+
+    private void InitializeJsonColumn(
+        ColumnOperation columnOperation,
+        JsonColumn jsonColumn,
+        bool isNullable,
+        IEnumerable<IAnnotation> migrationsAnnotations,
+        bool inline = false)
+    {
+        columnOperation.ColumnType = jsonColumn.StoreType;
+        columnOperation.IsNullable = isNullable;
+
+        columnOperation.ClrType = typeof(string);
+        columnOperation.DefaultValue = inline || isNullable
+            ? null
+            : GetDefaultValue(columnOperation.ClrType);
+
         columnOperation.AddAnnotations(migrationsAnnotations);
     }
 
@@ -2352,7 +2394,6 @@ public class MigrationsModelDiffer : IMigrationsModelDiffer
     protected virtual bool HasDifferences(IEnumerable<IAnnotation> source, IEnumerable<IAnnotation> target)
     {
         var unmatched = new List<IAnnotation>(target);
-
         foreach (var annotation in source)
         {
             var index = unmatched.FindIndex(

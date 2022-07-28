@@ -1331,6 +1331,25 @@ public static class RelationalTestModelBuilderExtensions
         return builder;
     }
 
+    public static ModelBuilderTest.TestOwnedNavigationBuilder<TOwnerEntity, TDependentEntity> ToJson<TOwnerEntity, TDependentEntity>(
+        this ModelBuilderTest.TestOwnedNavigationBuilder<TOwnerEntity, TDependentEntity> builder,
+        string jsonColumnName)
+        where TOwnerEntity : class
+        where TDependentEntity : class
+    {
+        switch (builder)
+        {
+            case IInfrastructure<OwnedNavigationBuilder<TOwnerEntity, TDependentEntity>> genericBuilder:
+                genericBuilder.Instance.ToJson(jsonColumnName);
+                break;
+            case IInfrastructure<OwnedNavigationBuilder> nonGenericBuilder:
+                nonGenericBuilder.Instance.ToJson(jsonColumnName);
+                break;
+        }
+
+        return builder;
+    }
+
     public static ModelBuilderTest.TestOwnershipBuilder<TOwnerEntity, TDependentEntity> HasConstraintName<TOwnerEntity, TDependentEntity>(
         this ModelBuilderTest.TestOwnershipBuilder<TOwnerEntity, TDependentEntity> builder,
         string name)

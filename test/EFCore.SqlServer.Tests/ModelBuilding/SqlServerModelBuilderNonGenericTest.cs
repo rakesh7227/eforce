@@ -63,4 +63,12 @@ public class SqlServerModelBuilderNonGenericTest : SqlServerModelBuilderTestBase
             Action<ModelConfigurationBuilder>? configure)
             => new ModelBuilderNonGenericTest.NonGenericTestModelBuilder(testHelpers, configure);
     }
+
+    public class SqlServerNonGenericJsonTest : RelationalJsonTestBase
+    {
+        protected override TestModelBuilder CreateTestModelBuilder(
+            TestHelpers testHelpers,
+            Action<ModelConfigurationBuilder>? configure)
+            => new ModelBuilderNonGenericTest.NonGenericTestModelBuilder(testHelpers, configure);
+    }
 }
