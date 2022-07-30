@@ -477,7 +477,7 @@ public partial class RelationalShapedQueryCompilingExpressionVisitor
                         Expression.Call(
                             jsonElementShaperLambdaParameter,
                             JsonElementGetPropertyMethod,
-                            Expression.Constant(ownedNavigation.JsonElementName())),
+                            Expression.Constant(ownedNavigation.GetJsonPropertyName())),
                         typeof(JsonElement?)));
 
                 shaperBlockExpressions.Add(innerJsonElementAssignment);
@@ -1208,7 +1208,7 @@ public partial class RelationalShapedQueryCompilingExpressionVisitor
                             null,
                             ExtractJsonPropertyMethodInfo,
                             jsonElementParameter,
-                            Expression.Constant(property.JsonElementName()),
+                            Expression.Constant(property.JsonPropertyName()),
                             Expression.Constant(converter.ProviderClrType));
 
                         return Expression.Invoke(
@@ -1223,7 +1223,7 @@ public partial class RelationalShapedQueryCompilingExpressionVisitor
                                 null,
                                 ExtractJsonPropertyMethodInfo,
                                 jsonElementParameter,
-                                Expression.Constant(property.JsonElementName()),
+                                Expression.Constant(property.JsonPropertyName()),
                                 Expression.Constant(property.ClrType)),
                             property.ClrType);
                     }
@@ -1302,7 +1302,7 @@ public partial class RelationalShapedQueryCompilingExpressionVisitor
             _variables.Add(keyValuesParameter);
             _expressions.Add(keyValuesAssignment);
 
-            var jsonColumnTypeMapping = entityType.JsonColumnTypeMapping()!;
+            var jsonColumnTypeMapping = entityType.GetJsonColumnTypeMapping()!;
             if (_existingJsonElementMap.TryGetValue((jsonColumnProjectionIndex, additionalPath), out var exisitingJsonElementVariable))
             {
                 return (exisitingJsonElementVariable, keyValuesParameter);

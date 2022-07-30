@@ -2259,14 +2259,14 @@ public class RelationalModelValidator : ModelValidator
                     "Json mapped type can't be owned by a non-json owned type. Only regular entity types or json mapped types are allowed.");
             }
 
-            var rootTypes = nonOwnedTypes.Select(x => x.GetRootType()).ToList();
-            if (rootTypes.Count > 1)
+            var distinctRootTypes = nonOwnedTypes.Select(x => x.GetRootType()).Distinct().ToList();
+            if (distinctRootTypes.Count > 1)
             {
                 // issue #28442
                 throw new InvalidOperationException("Table splitting is not supported for entities containing entities mapped to json.");
             }
 
-            var rootAggregateType = rootTypes[0];
+            var rootAggregateType = distinctRootTypes[0];
             var jsonEntitiesMappedToSameJsonColumn = mappedTypes
                 .Where(x => x.FindOwnership() != null && !x.FindOwnership()!.PrincipalEntityType.IsMappedToJson())
                 .GroupBy(x => x.JsonColumnName())

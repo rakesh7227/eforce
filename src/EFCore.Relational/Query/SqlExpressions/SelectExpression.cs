@@ -410,7 +410,7 @@ public sealed partial class SelectExpression : TableExpressionBase
             {
                 var targetEntityType = ownedJsonNavigation.TargetEntityType;
                 var jsonColumnName = targetEntityType.JsonColumnName()!;
-                var jsonColumnTypeMapping = targetEntityType.JsonColumnTypeMapping()!;
+                var jsonColumnTypeMapping = targetEntityType.GetJsonColumnTypeMapping()!;
 
                 var jsonColumn = new ConcreteColumnExpression(
                     jsonColumnName,

@@ -1898,19 +1898,8 @@ public static class RelationalEntityTypeExtensions
             return jsonColumnName;
         }
 
-        //var ownership = entityType.FindOwnership();
         return entityType.FindOwnership()?.PrincipalEntityType.JsonColumnName();
-
-        //if (ownership != null)
-        //{
-        //    return ownership.PrincipalEntityType.JsonColumnName();
-        //}
-
-        //return entityType.FindAnnotation(RelationalAnnotationNames.JsonColumnName)?.Value as string;
     }
-
-
-        //=> entityType.FindAnnotation(RelationalAnnotationNames.JsonColumnName)?.Value as string;
 
     /// <summary>
     /// TODO
@@ -1938,5 +1927,13 @@ public static class RelationalEntityTypeExtensions
     ///     TODO
     /// </summary>
     public static RelationalTypeMapping? GetJsonColumnTypeMapping(this IReadOnlyEntityType entityType)
-        => entityType.FindAnnotation(RelationalAnnotationNames.JsonColumnTypeMapping)?.Value as RelationalTypeMapping;
+    {
+        var jsonColumnTypeMapping = entityType.FindAnnotation(RelationalAnnotationNames.JsonColumnTypeMapping)?.Value as RelationalTypeMapping;
+        if (jsonColumnTypeMapping != null)
+        {
+            return jsonColumnTypeMapping;
+        }
+
+        return entityType.FindOwnership()?.PrincipalEntityType.GetJsonColumnTypeMapping();
+    }
 }

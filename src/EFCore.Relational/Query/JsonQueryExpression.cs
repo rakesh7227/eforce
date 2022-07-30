@@ -89,10 +89,9 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var typeMapping = property.FindRelationalTypeMapping()!;
             var pathSegment = new SqlConstantExpression(
-                Constant(property.JsonElementName()),
+                Constant(property.JsonPropertyName()),
                 typeMapping);
 
-//            var pathSegment = property.GetJsonElementName();
             var newPath = JsonPath.ToList();
             newPath.Add(pathSegment);
 
@@ -109,11 +108,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual JsonQueryExpression BindNavigation(INavigation navigation)
         {
             var targetEntityType = navigation.TargetEntityType;
-            var typeMapping = targetEntityType.JsonColumnTypeMapping()!;
+            var typeMapping = targetEntityType.GetJsonColumnTypeMapping()!;
 
             var newJsonPath = JsonPath.ToList();
             var pathSegment = new SqlConstantExpression(
-                Constant(navigation.JsonElementName()),
+                Constant(navigation.GetJsonPropertyName()),
                 typeMapping);
 
             newJsonPath.Add(pathSegment);
