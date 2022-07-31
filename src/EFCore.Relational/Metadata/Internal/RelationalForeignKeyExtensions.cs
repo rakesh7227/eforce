@@ -35,8 +35,8 @@ public static class RelationalForeignKeyExtensions
             : duplicateForeignKey.PrincipalKey.DeclaringEntityType;
         var duplicatePrincipalTable = StoreObjectIdentifier.Create(duplicatePrincipalType, storeObject.StoreObjectType);
 
-        var columnNames = foreignKey.GetMappedKeyProperties().GetColumnNames(storeObject);
-        var duplicateColumnNames = duplicateForeignKey.GetMappedKeyProperties().GetColumnNames(storeObject);
+        var columnNames = foreignKey.Properties.GetColumnNames(storeObject);
+        var duplicateColumnNames = duplicateForeignKey.Properties.GetColumnNames(storeObject);
 
         if (columnNames is null
             || duplicateColumnNames is null)
@@ -62,9 +62,9 @@ public static class RelationalForeignKeyExtensions
         if (principalTable is null
             || duplicatePrincipalTable is null
             || principalTable != duplicatePrincipalTable
-            || foreignKey.PrincipalKey.GetMappedKeyProperties().GetColumnNames(principalTable.Value)
+            || foreignKey.PrincipalKey.Properties.GetColumnNames(principalTable.Value)
                 is not { } principalColumns
-            || duplicateForeignKey.PrincipalKey.GetMappedKeyProperties().GetColumnNames(principalTable.Value)
+            || duplicateForeignKey.PrincipalKey.Properties.GetColumnNames(principalTable.Value)
                 is not { } duplicatePrincipalColumns)
         {
             if (shouldThrow)
@@ -208,8 +208,8 @@ public static class RelationalForeignKeyExtensions
             return null;
         }
 
-        var propertyNames = foreignKey.GetMappedKeyProperties().GetColumnNames(storeObject);
-        var principalPropertyNames = foreignKey.PrincipalKey.GetMappedKeyProperties().GetColumnNames(principalStoreObject);
+        var propertyNames = foreignKey.Properties.GetColumnNames(storeObject);
+        var principalPropertyNames = foreignKey.PrincipalKey.Properties.GetColumnNames(principalStoreObject);
         if (propertyNames == null
             || principalPropertyNames == null)
         {
@@ -247,8 +247,8 @@ public static class RelationalForeignKeyExtensions
                 if (principalStoreObject.Name == otherForeignKey.PrincipalEntityType.GetTableName()
                     && principalStoreObject.Schema == otherForeignKey.PrincipalEntityType.GetSchema())
                 {
-                    var otherColumnNames = otherForeignKey.GetMappedKeyProperties().GetColumnNames(storeObject);
-                    var otherPrincipalColumnNames = otherForeignKey.PrincipalKey.GetMappedKeyProperties().GetColumnNames(principalStoreObject);
+                    var otherColumnNames = otherForeignKey.Properties.GetColumnNames(storeObject);
+                    var otherPrincipalColumnNames = otherForeignKey.PrincipalKey.Properties.GetColumnNames(principalStoreObject);
                     if (otherColumnNames != null
                         && otherPrincipalColumnNames != null
                         && propertyNames.SequenceEqual(otherColumnNames)
@@ -337,32 +337,32 @@ public static class RelationalForeignKeyExtensions
                     .Concat(entityType2.GetMappingFragments(StoreObjectType.Table).Select(f => f.StoreObject))).Any();
     }
 
-    /// <summary>
-    ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
-    ///     the same compatibility standards as public APIs. It may be changed or removed without notice in
-    ///     any release. You should only use it directly in your code with extreme caution and knowing that
-    ///     doing so can result in application failures when updating to a new Entity Framework Core release.
-    /// </summary>
-    public static IEnumerable<IReadOnlyProperty> GetMappedKeyProperties(this IReadOnlyForeignKey foreignKey)
-    {
-        if (!foreignKey.DeclaringEntityType.IsMappedToJson())
-        {
-            return foreignKey.Properties;
-        }
+    ///// <summary>
+    /////     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
+    /////     the same compatibility standards as public APIs. It may be changed or removed without notice in
+    /////     any release. You should only use it directly in your code with extreme caution and knowing that
+    /////     doing so can result in application failures when updating to a new Entity Framework Core release.
+    ///// </summary>
+    //public static IEnumerable<IReadOnlyProperty> GetMappedKeyProperties(this IReadOnlyForeignKey foreignKey)
+    //{
+    //    if (!foreignKey.DeclaringEntityType.IsMappedToJson())
+    //    {
+    //        return foreignKey.Properties;
+    //    }
 
-        // TODO: fix this once we enable json entity being owned by another owned non-json entity (issue #28441)
+    //    // TODO: fix this once we enable json entity being owned by another owned non-json entity (issue #28441)
 
-        // for json collections we need to filter out the ordinal key as it's not mapped to any column
-        // there could be multiple of these in deeply nested structures,
-        // so we traverse to the outermost owner to see how many mapped keys there are
-        var currentEntity = foreignKey.DeclaringEntityType;
-        while (currentEntity.IsMappedToJson())
-        {
-            currentEntity = currentEntity.FindOwnership()!.PrincipalEntityType;
-        }
+    //    // for json collections we need to filter out the ordinal key as it's not mapped to any column
+    //    // there could be multiple of these in deeply nested structures,
+    //    // so we traverse to the outermost owner to see how many mapped keys there are
+    //    var currentEntity = foreignKey.DeclaringEntityType;
+    //    while (currentEntity.IsMappedToJson())
+    //    {
+    //        currentEntity = currentEntity.FindOwnership()!.PrincipalEntityType;
+    //    }
 
-        var count = currentEntity.FindPrimaryKey()!.Properties.Count;
+    //    var count = currentEntity.FindPrimaryKey()!.Properties.Count;
 
-        return foreignKey.Properties.Take(count);
-    }
+    //    return foreignKey.Properties.Take(count);
+    //}
 }

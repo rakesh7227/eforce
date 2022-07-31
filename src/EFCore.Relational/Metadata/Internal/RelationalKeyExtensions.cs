@@ -25,8 +25,8 @@ public static class RelationalKeyExtensions
         in StoreObjectIdentifier storeObject,
         bool shouldThrow)
     {
-        var columnNames = key.GetMappedKeyProperties().GetColumnNames(storeObject);
-        var duplicateColumnNames = duplicateKey.GetMappedKeyProperties().GetColumnNames(storeObject);
+        var columnNames = key.Properties.GetColumnNames(storeObject);
+        var duplicateColumnNames = duplicateKey.Properties.GetColumnNames(storeObject);
         if (columnNames == null
             || duplicateColumnNames == null)
         {

@@ -2279,19 +2279,12 @@ public class RelationalModelValidator : ModelValidator
                     $"Multiple aggregates are mapped to the same JSON column '{jsonEntitiesMappedToSameJsonColumn.First().Key}' in table '{table.Name}'. Each aggreagate must map to a different column.");
             }
 
-            var rootAggregateKeyProperties = rootAggregateType.FindPrimaryKey()!.Properties;
-            var rootAggregateKeyColumnNames = new string[rootAggregateKeyProperties.Count];
-            for (var i = 0; i < rootAggregateKeyColumnNames.Length; i++)
-            {
-                rootAggregateKeyColumnNames[i] = rootAggregateKeyProperties[i].GetColumnName(table)!;
-            }
-
             ValidateJsonEntityRootAggregate(table, rootAggregateType);
 
             foreach (var jsonEntityType in mappedTypes.Where(x => x.IsMappedToJson()))
             {
                 ValidateJsonEntityNavigations(table, jsonEntityType);
-                ValidateJsonEntityKey(table, rootAggregateKeyColumnNames, jsonEntityType);
+                ValidateJsonEntityKey(table, jsonEntityType);
                 ValidateJsonEntityProperties(table, jsonEntityType);
             }
         }
@@ -2371,45 +2364,62 @@ public class RelationalModelValidator : ModelValidator
     /// </summary>
     protected virtual void ValidateJsonEntityKey(
         in StoreObjectIdentifier storeObject,
-        string[] rootAggregateKeyColumnNames,
         IEntityType jsonEntityType)
     {
-        var mappedPrimaryKeyProperties = jsonEntityType.FindPrimaryKey()!.GetMappedKeyProperties();
-        if (mappedPrimaryKeyProperties.Count != rootAggregateKeyColumnNames.Length)
-        {
-            throw new InvalidOperationException(
-                $"Entity type '{jsonEntityType.DisplayName()}' has incorrect number of primary key properties.");
-        }
+        var primaryKeyProperties = jsonEntityType.FindPrimaryKey()!.Properties;
+        var ownership = jsonEntityType.FindOwnership()!;
 
-        if (NavigationChainContainsJsonCollection(jsonEntityType))
+        if (!ownership.IsUnique)
         {
             // for collection entities, make sure that ordinal key is not explicitly defined
-            var ordinalKeyProperty = mappedPrimaryKeyProperties.Last();
+            var ordinalKeyProperty = primaryKeyProperties.Last();
             if (!ordinalKeyProperty.IsShadowProperty() || ordinalKeyProperty.ClrType != typeof(int) || !ordinalKeyProperty.Name.EndsWith("Id", StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Entity type '{jsonEntityType.DisplayName()}' is part of collection mapped to json and has it's ordinal key defined explicitly. Only implicitly defined ordinal keys are supported.");
             }
         }
-    }
 
-    private bool NavigationChainContainsJsonCollection(IEntityType entityType)
-    {
-        if (entityType.IsMappedToJson())
+        var ownerEntityTypeKeyPropertiesCount = ownership.PrincipalEntityType.FindPrimaryKey()!.Properties.Count;
+        var expectedKeyCount = ownership.IsUnique
+            ? ownerEntityTypeKeyPropertiesCount
+            : ownerEntityTypeKeyPropertiesCount + 1;
+
+        if (primaryKeyProperties.Count != expectedKeyCount)
         {
-            var ownership = entityType.FindOwnership()!;
-            if (!ownership.IsUnique)
-            {
-                return true;
-            }
-            else
-            {
-                return NavigationChainContainsJsonCollection(ownership.PrincipalEntityType);
-            }
+            throw new InvalidOperationException(
+                $"Entity type '{jsonEntityType.DisplayName()}' has incorrect number of primary key properties. Expected number is: {expectedKeyCount}, actual number is: {primaryKeyProperties.Count}.");
         }
 
-        return false;
+        //if (NavigationChainContainsJsonCollection(jsonEntityType))
+        //{
+        //    // for collection entities, make sure that ordinal key is not explicitly defined
+        //    var ordinalKeyProperty = primaryKeyProperties.Last();
+        //    if (!ordinalKeyProperty.IsShadowProperty() || ordinalKeyProperty.ClrType != typeof(int) || !ordinalKeyProperty.Name.EndsWith("Id", StringComparison.Ordinal))
+        //    {
+        //        throw new InvalidOperationException(
+        //            $"Entity type '{jsonEntityType.DisplayName()}' is part of collection mapped to json and has it's ordinal key defined explicitly. Only implicitly defined ordinal keys are supported.");
+        //    }
+        //}
     }
+
+    //private bool NavigationChainContainsJsonCollection(IEntityType entityType)
+    //{
+    //    if (entityType.IsMappedToJson())
+    //    {
+    //        var ownership = entityType.FindOwnership()!;
+    //        if (!ownership.IsUnique)
+    //        {
+    //            return true;
+    //        }
+    //        else
+    //        {
+    //            return NavigationChainContainsJsonCollection(ownership.PrincipalEntityType);
+    //        }
+    //    }
+
+    //    return false;
+    //}
 
     /// <summary>
     /// TODO

@@ -205,11 +205,11 @@ public class SharedTableConvention : IModelFinalizingConvention
                 continue;
             }
 
-            // don't uniquify json columns
-            if (entityType.IsMappedToJson())
-            {
-                continue;
-            }
+            //// don't uniquify json columns
+            //if (entityType.IsMappedToJson())
+            //{
+            //    continue;
+            //}
 
             if (!properties.TryGetValue(columnName, out var otherProperty))
             {

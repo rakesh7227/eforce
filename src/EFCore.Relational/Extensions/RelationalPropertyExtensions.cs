@@ -1512,15 +1512,15 @@ public static class RelationalPropertyExtensions
             var linkingRelationship = principalProperty.DeclaringEntityType
                 .FindRowInternalForeignKeys(storeObject).FirstOrDefault();
 
-            // principal is mapped to json, but the property we are fetching the shared object root for is not
-            // this can happen only when the model is not fully configured yet, parent is already marked as json,
-            // the child is not marked yet, but it will be (mix of owned entities and non-owned is not supported)
-            // in this case, we should still find the linking relationship, even though we normally don't do it for the json entities
-            // just so we can complete configuring the relationships
-            if (linkingRelationship == null && principalProperty.DeclaringEntityType.IsMappedToJson())
-            {
-                linkingRelationship = FindRowInternalForeignKeyForJson(principalProperty.DeclaringEntityType, storeObject);
-            }
+            //// principal is mapped to json, but the property we are fetching the shared object root for is not
+            //// this can happen only when the model is not fully configured yet, parent is already marked as json,
+            //// the child is not marked yet, but it will be (mix of owned entities and non-owned is not supported)
+            //// in this case, we should still find the linking relationship, even though we normally don't do it for the json entities
+            //// just so we can complete configuring the relationships
+            //if (linkingRelationship == null && principalProperty.DeclaringEntityType.IsMappedToJson())
+            //{
+            //    linkingRelationship = FindRowInternalForeignKeyForJson(principalProperty.DeclaringEntityType, storeObject);
+            //}
 
             if (linkingRelationship == null)
             {
@@ -1533,37 +1533,37 @@ public static class RelationalPropertyExtensions
         return principalProperty == property ? null : principalProperty;
     }
 
-    private static IReadOnlyForeignKey? FindRowInternalForeignKeyForJson(
-        IReadOnlyEntityType entityType,
-        StoreObjectIdentifier storeObject)
-    {
-        var primaryKey = entityType.FindPrimaryKey();
-        if (primaryKey == null)
-        {
-            return null;
-        }
+    //private static IReadOnlyForeignKey? FindRowInternalForeignKeyForJson(
+    //    IReadOnlyEntityType entityType,
+    //    StoreObjectIdentifier storeObject)
+    //{
+    //    var primaryKey = entityType.FindPrimaryKey();
+    //    if (primaryKey == null)
+    //    {
+    //        return null;
+    //    }
 
-        foreach (var foreignKey in entityType.GetForeignKeys())
-        {
-            if (!foreignKey.PrincipalKey.IsPrimaryKey()
-                || foreignKey.PrincipalEntityType.IsAssignableFrom(foreignKey.DeclaringEntityType)
-                || !foreignKey.Properties.SequenceEqual(primaryKey.Properties)
-                || !IsMapped(foreignKey, storeObject))
-            {
-                continue;
-            }
+    //    foreach (var foreignKey in entityType.GetForeignKeys())
+    //    {
+    //        if (!foreignKey.PrincipalKey.IsPrimaryKey()
+    //            || foreignKey.PrincipalEntityType.IsAssignableFrom(foreignKey.DeclaringEntityType)
+    //            || !foreignKey.Properties.SequenceEqual(primaryKey.Properties)
+    //            || !IsMapped(foreignKey, storeObject))
+    //        {
+    //            continue;
+    //        }
 
-            return foreignKey;
-        }
+    //        return foreignKey;
+    //    }
 
-        return null;
+    //    return null;
 
-        static bool IsMapped(IReadOnlyForeignKey foreignKey, StoreObjectIdentifier storeObject)
-            => (StoreObjectIdentifier.Create(foreignKey.DeclaringEntityType, storeObject.StoreObjectType) == storeObject
-                    || foreignKey.DeclaringEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject))
-                && (StoreObjectIdentifier.Create(foreignKey.PrincipalEntityType, storeObject.StoreObjectType) == storeObject
-                    || foreignKey.PrincipalEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject));
-    }
+    //    static bool IsMapped(IReadOnlyForeignKey foreignKey, StoreObjectIdentifier storeObject)
+    //        => (StoreObjectIdentifier.Create(foreignKey.DeclaringEntityType, storeObject.StoreObjectType) == storeObject
+    //                || foreignKey.DeclaringEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject))
+    //            && (StoreObjectIdentifier.Create(foreignKey.PrincipalEntityType, storeObject.StoreObjectType) == storeObject
+    //                || foreignKey.PrincipalEntityType.GetMappingFragments(storeObject.StoreObjectType).Any(f => f.StoreObject == storeObject));
+    //}
 
     private static IReadOnlyProperty? FindSharedObjectRootConcurrencyTokenProperty(
         IReadOnlyProperty property,
