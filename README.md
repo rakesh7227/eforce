@@ -136,3 +136,5 @@ If you have a specific question about using these projects, we encourage you to 
 * [How to write an EF Core provider](https://docs.microsoft.com/ef/core/providers/writing-a-provider)
 * [Security](./docs/security.md)
 * [Code of conduct](.github/CODE_OF_CONDUCT.md)
+
+#Every thing checked by rakesh and ready to merge
